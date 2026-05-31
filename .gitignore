@@ -1,6 +1,6 @@
 *.psbuild
-x64
 Old
 Configs
 Bin
 Test
+_RunMe.cmd
