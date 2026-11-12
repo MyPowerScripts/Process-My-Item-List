@@ -10,6 +10,8 @@ Change Log for PIL
           Added Clear Seleted/Checked/All Results
           Changed "Status Message" to "Status"
           Updated Load PIL List to Set Completed Status
+          Fix Import Duplicate Names Issue
+          Cancel process List when canceling Prompt for Variables
 ------------------------------------------------------------------------------------------------
 2.0.1.1 - Chnage to Use Az.Account/MgGraph Modules >= Configured Version
 ------------------------------------------------------------------------------------------------
@@ -9855,52 +9857,60 @@ Function Start-ProcessingItems()
         $TmpVariables.Add($Key, $DialogResult.OrderedItems[$Key])
       }
     }
-  }
-  
-  # Add Common Variables
-  Write-RichTextBox -RichTextBox $RichTextBox -Text "Adding Custom Runspace Pool Variables"
-  $RichTextBox.SelectionIndent = 30
-  If ([MyRuntime]::ThreadConfig.Variables.Count -gt 0)
-  {
-    ForEach ($Variable In @([MyRuntime]::ThreadConfig.Variables.Values | Where-Object -FilterScript { $PSItem.Name -notin $TmpNames }))
+    Else
     {
-      $TmpVariables.Add($Variable.Name, $Variable.Value)
+      Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "CANCELLED" -TextFore ([MyConfig]::Colors.TextWarn) -Value "Canceled the Prompt for the Runtime values" -ValueFore ([MyConfig]::Colors.TextFore)
+      $DisplayResult = [System.Windows.Forms.DialogResult]::Cancel
     }
   }
   
-  $PoolParams.Add("Variables", $TmpVariables)
-  Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "SUCCESS" -TextFore ([MyConfig]::Colors.TextGood) -Value "Found $([MyRuntime]::ThreadConfig.Variables.Count) Runspace Pool Variables" -ValueFore ([MyConfig]::Colors.TextFore)
-  
-  # Starting Runspace Pool
-  $RichTextBox.SelectionIndent = 20
-  Write-RichTextBox -RichTextBox $RichTextBox -Text "Starting Runspace Pool"
-  Clear-Host
-  $RichTextBox.SelectionIndent = 30
-  $ChkPool = Start-MyRSPool @PoolParams -PassThru
-    
-  If ($ChkPool.State -eq "Opened")
+  If ($DisplayResult -eq [System.Windows.Forms.DialogResult]::OK)
   {
-    Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "SUCCESS" -TextFore ([MyConfig]::Colors.TextGood) -Value "Runspace Pool ID: $($ChkPool.InstanceID)" -ValueFore ([MyConfig]::Colors.TextFore)
+    # Add Common Variables
+    Write-RichTextBox -RichTextBox $RichTextBox -Text "Adding Custom Runspace Pool Variables"
+    $RichTextBox.SelectionIndent = 30
+    If ([MyRuntime]::ThreadConfig.Variables.Count -gt 0)
+    {
+      ForEach ($Variable In @([MyRuntime]::ThreadConfig.Variables.Values | Where-Object -FilterScript { $PSItem.Name -notin $TmpNames }))
+      {
+        $TmpVariables.Add($Variable.Name, $Variable.Value)
+      }
+    }
+    
+    $PoolParams.Add("Variables", $TmpVariables)
+    Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "SUCCESS" -TextFore ([MyConfig]::Colors.TextGood) -Value "Found $([MyRuntime]::ThreadConfig.Variables.Count) Runspace Pool Variables" -ValueFore ([MyConfig]::Colors.TextFore)
+    
+    # Starting Runspace Pool
     $RichTextBox.SelectionIndent = 20
-    Write-RichTextBox -RichTextBox $RichTextBox -Text "Starting $($ListItems.Count) Runspace Pool Jobs"
-    
-    ForEach ($ListItem In $ListItems)
+    Write-RichTextBox -RichTextBox $RichTextBox -Text "Starting Runspace Pool"
+    Clear-Host
+    $RichTextBox.SelectionIndent = 30
+    $ChkPool = Start-MyRSPool @PoolParams -PassThru
+      
+    If ($ChkPool.State -eq "Opened")
     {
-      $ListItem | Start-MyRSJob -InputParam "ListViewItem" -ScriptBlock ([ScriptBlock]::Create([MyRuntime]::ThreadConfig.ThreadScript))
-    }
-    
-    $PILLeftProgressBar.Value = 0
-    $PILRightProgressBar.Value = 0
-    $PILLeftProgressBar.Maximum = $ListItems.Count
-    $PILRightProgressBar.Maximum = $ListItems.Count
+      Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "SUCCESS" -TextFore ([MyConfig]::Colors.TextGood) -Value "Runspace Pool ID: $($ChkPool.InstanceID)" -ValueFore ([MyConfig]::Colors.TextFore)
+      $RichTextBox.SelectionIndent = 20
+      Write-RichTextBox -RichTextBox $RichTextBox -Text "Starting $($ListItems.Count) Runspace Pool Jobs"
+      
+      ForEach ($ListItem In $ListItems)
+      {
+        $ListItem | Start-MyRSJob -InputParam "ListViewItem" -ScriptBlock ([ScriptBlock]::Create([MyRuntime]::ThreadConfig.ThreadScript))
+      }
+      
+      $PILLeftProgressBar.Value = 0
+      $PILRightProgressBar.Value = 0
+      $PILLeftProgressBar.Maximum = $ListItems.Count
+      $PILRightProgressBar.Maximum = $ListItems.Count
 
-    # Disable Auto Close
-    $PILTimer.Enabled = $False
-  }
-  Else
-  {
-    Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "ERROR" -TextFore ([MyConfig]::Colors.TextBad) -Value "Failed to Start Runspace Pool" -ValueFore ([MyConfig]::Colors.TextFore)
-    $DisplayResult = [System.Windows.Forms.DialogResult]::Cancel
+      # Disable Auto Close
+      $PILTimer.Enabled = $False
+    }
+    Else
+    {
+      Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "ERROR" -TextFore ([MyConfig]::Colors.TextBad) -Value "Failed to Start Runspace Pool" -ValueFore ([MyConfig]::Colors.TextFore)
+      $DisplayResult = [System.Windows.Forms.DialogResult]::Cancel
+    }
   }
   
   If ($ShowHeader)
@@ -14606,12 +14616,12 @@ function Start-PILTopMenuStripItemClick
                 $TmpColName = $TmpColNames[0].Name
               }
               
-              $TmpItems = @($TmpCSV | Select-Object -ExpandProperty $TmpColName)
+              $TmpItems = @(($TmpCSV | Select-Object -ExpandProperty $TmpColName -Unique))
             }
           }
           Else
           {
-            $TmpItems = @(Get-Content -Path $PILOpenFileDialog.FileName)
+            $TmpItems = @((Get-Content -Path $PILOpenFileDialog.FileName | Select-Object -Unique))
           }
           
           If ($TmpItems.Count -eq 0)
