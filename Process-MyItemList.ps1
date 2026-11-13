@@ -5,6 +5,8 @@
 Change Log for PIL
 ------------------------------------------------------------------------------------------------
 2.0.1.3 - Added additional Status success values
+          On Update Variables only update the ones with *'s
+          Always Prompt when Value equals ?
 ------------------------------------------------------------------------------------------------
 2.0.1.2 - Added ? for Prompt for Variable Value
           Update so Prompt for Variable shows in Alphabetical Order
@@ -9852,7 +9854,10 @@ Function Start-ProcessingItems()
       {
         ForEach ($Key In $DialogResult.OrderedItems.Keys)
         {
-          [MyRuntime]::ThreadConfig.Variables[$Key].Value = $DialogResult.OrderedItems[$Key]
+          If ([MyRuntime]::ThreadConfig.Variables[$Key].Value -eq "*")
+          {
+            [MyRuntime]::ThreadConfig.Variables[$Key].Value = $DialogResult.OrderedItems[$Key]
+          }
         }
       }
       ForEach ($Key In $DialogResult.OrderedItems.Keys)
